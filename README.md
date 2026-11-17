@@ -84,7 +84,9 @@ To reverse: `python manage.py migrate invoice 0013`
 ## Masked subjects and lines
 
 The GraphQL `subject` of a bill and `line` of a bill item are the whole row of the object they point at, `json_ext`
-included. For a user without the masked-data right (`CoreConfig.gql_query_enable_viewing_masked_data_perms`), that
-row is read from a copy masked by the data mask registered for the object's model (`MaskingClassRegistryPoint`),
-when one is registered and enabled; the object itself is not changed. A beneficiary subject, for instance, is masked
+included: its concrete column values, by attribute name in camel case, never private attributes such as the model
+state or the dirty-field tracking. For a user without the masked-data right
+(`CoreConfig.gql_query_enable_viewing_masked_data_perms`), they are read from a copy masked by the data mask
+registered for the object's model (`MaskingClassRegistryPoint`), when one is registered and enabled; the object
+itself is not changed. A beneficiary subject, for instance, is masked
 by `social_protection`'s beneficiary mask.

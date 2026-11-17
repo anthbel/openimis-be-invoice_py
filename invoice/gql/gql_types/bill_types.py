@@ -7,7 +7,7 @@ from core import prefix_filterset, ExtendedConnection
 from invoice.gql.filter_mixin import GenericFilterGQLTypeMixin
 from invoice.models import Bill, \
     BillItem, BillEvent, BillPayment
-from invoice.utils import masked_for_reader, underscore_to_camel
+from invoice.utils import masked_row, underscore_to_camel
 from location.models import Location
 from core.gql import ScopedQuerysetMixin
 
@@ -38,10 +38,8 @@ class BillGQLType(ScopedQuerysetMixin, DjangoObjectType, GenericFilterGQLTypeMix
 
     def resolve_subject(root, info):
         if root.subject:
-            subject_object_dict = masked_for_reader(root.subject, info).__dict__
-            subject_object_dict.pop('_state', None)
             subject_object_dict = {
-                underscore_to_camel(k): v for k, v in list(subject_object_dict.items())
+                underscore_to_camel(k): v for k, v in masked_row(root.subject, info).items()
             }
             if root.subject_type.name == "batch run" and subject_object_dict.get('locationId', None):
                 location = Location.objects.filter(id=subject_object_dict['locationId'], validity_to__isnull=True)
@@ -92,13 +90,9 @@ class BillItemGQLType(ScopedQuerysetMixin, DjangoObjectType, GenericFilterGQLTyp
 
     def resolve_line(root, info):
         if root.line:
-            line_object_dict = masked_for_reader(root.line, info).__dict__
-            line_object_dict.pop('_state', None)
-            key_values = list(line_object_dict.items())
-            line_object_dict.clear()
-            for k, v in key_values:
-                new_key = underscore_to_camel(k)
-                line_object_dict[new_key] = v
+            line_object_dict = {
+                underscore_to_camel(k): v for k, v in masked_row(root.line, info).items()
+            }
             line_object_dict = json.dumps(line_object_dict, cls=DjangoJSONEncoder)
             return line_object_dict
 

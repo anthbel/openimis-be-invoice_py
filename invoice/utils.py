@@ -27,15 +27,16 @@ def underscore_to_camel(name):
     return under_pat.sub(lambda x: x.group(1).upper(), name)
 
 
-def masked_for_reader(obj, info):
-    """``obj``, or a copy of it masked by the mask registered for its model when the user of the GraphQL request
-    may not see masked data. The object itself is left as it is."""
+def masked_row(obj, info):
+    """The column values of ``obj`` by attribute name, private attributes (model state, dirty-field tracking) left
+    out. When the user of the GraphQL request may not see masked data and a mask is registered for the model, they
+    are read from a copy masked by that mask. ``obj`` itself is not changed."""
     mask = MaskingClassStorage.get_masking_class(type(obj).__name__)
-    if mask is None or not mask.masking_enabled:
-        return obj
-    if info.context.user.has_perms(CoreConfig.gql_query_enable_viewing_masked_data_perms):
-        return obj
-    return mask.apply_mask(copy.deepcopy(obj))
+    if mask is not None and mask.masking_enabled \
+            and not info.context.user.has_perms(CoreConfig.gql_query_enable_viewing_masked_data_perms):
+        obj = mask.apply_mask(copy.deepcopy(obj))
+    values = obj.__dict__
+    return {field.attname: values[field.attname] for field in obj._meta.concrete_fields if field.attname in values}
 
 
 def resolve_payment_details(payment_invoice):
