@@ -1,7 +1,8 @@
 import graphene
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Q
+from django.core.exceptions import PermissionDenied
+from django.db.models import JSONField, Q
 from pandas import DataFrame
 
 from core.gql.export_mixin import ExportableQueryMixin
@@ -48,6 +49,35 @@ class BillQueryMixin(ExportableQueryMixin):
     }
 
     exportable_fields = ['bill']
+    # The columns of an export that follow a relation, by exported field: those the frontend requests.
+    export_relation_columns = {'bill': ('user_created__username',)}
+
+    @classmethod
+    def check_export_columns(cls, field_name, model, columns):
+        """Refuses an export whose ``columns`` name a column other than ``model``'s own columns, the keys of its
+        JSON columns and the ``export_relation_columns`` of ``field_name``: a column following any other relation
+        reads rows outside the reader's scope."""
+        concrete = model._meta.concrete_fields
+        allowed = {name for field in concrete for name in (field.name, field.attname)}
+        allowed.update(cls.export_relation_columns.get(field_name, ()))
+        json_columns = {field.name for field in concrete if isinstance(field, JSONField)}
+        for column in columns:
+            if column not in allowed and column.split("__", 1)[0] not in json_columns:
+                raise PermissionDenied(f"the export column {column} is not exportable")
+
+    @classmethod
+    def create_export_function(cls, field_name):
+        super().create_export_function(field_name)
+        resolver_name = f"resolve_{field_name}_export"
+        core_exporter = getattr(cls, resolver_name)
+
+        def exporter(root, info, **kwargs):
+            cls.check_export_columns(field_name, getattr(cls, field_name).model,
+                                     [cls._adjust_notation(column) for column in kwargs.get("fields") or []])
+            return core_exporter(root, info, **kwargs)
+
+        setattr(cls, resolver_name, staticmethod(exporter))
+
     bill = OrderedDjangoFilterConnectionField(
         BillGQLType,
         orderBy=graphene.List(of_type=graphene.String),
@@ -76,7 +106,7 @@ class BillQueryMixin(ExportableQueryMixin):
         if thirdparty_type:
             filters.append(Q(thirdparty_type__model=thirdparty_type))
 
-        qs = Bill.objects.filter(*filters)
+        qs = Bill.get_queryset(Bill.objects.filter(*filters), info.context.user)
         if InvoiceConfig.bill_user_filter:
             qs = InvoiceConfig.bill_user_filter(qs, info.context.user)
 
