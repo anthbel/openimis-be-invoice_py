@@ -80,3 +80,13 @@ To reverse: `python manage.py migrate invoice 0013`
 ### Bulk creation
 
 `BillService.bulk_create_bills()` and `bulk_create_bill_items()` use `bulk_create_with_history` from `django-simple-history` for performance with audit trail. After bulk insert, DB-assigned codes are re-fetched and patched into both the in-memory instances and their history records. Queries are chunked to stay under MSSQL's parameter limit.
+
+## Masked subjects and lines
+
+The GraphQL `subject` of a bill and `line` of a bill item are the whole row of the object they point at, `json_ext`
+included: its concrete column values, by attribute name in camel case, never private attributes such as the model
+state or the dirty-field tracking. For a user without the masked-data right
+(`CoreConfig.gql_query_enable_viewing_masked_data_perms`), they are read from a copy masked by the data mask
+registered for the object's model (`MaskingClassRegistryPoint`), when one is registered and enabled; the object
+itself is not changed. A beneficiary subject, for instance, is masked
+by `social_protection`'s beneficiary mask.
