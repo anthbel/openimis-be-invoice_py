@@ -7,7 +7,7 @@ from core import prefix_filterset, ExtendedConnection
 from invoice.gql.filter_mixin import GenericFilterGQLTypeMixin
 from invoice.models import Bill, \
     BillItem, BillEvent, BillPayment
-from invoice.utils import underscore_to_camel
+from invoice.utils import masked_for_reader, underscore_to_camel
 from location.models import Location
 from core.gql import ScopedQuerysetMixin
 
@@ -38,7 +38,7 @@ class BillGQLType(ScopedQuerysetMixin, DjangoObjectType, GenericFilterGQLTypeMix
 
     def resolve_subject(root, info):
         if root.subject:
-            subject_object_dict = root.subject.__dict__
+            subject_object_dict = masked_for_reader(root.subject, info).__dict__
             subject_object_dict.pop('_state', None)
             subject_object_dict = {
                 underscore_to_camel(k): v for k, v in list(subject_object_dict.items())
@@ -92,7 +92,7 @@ class BillItemGQLType(ScopedQuerysetMixin, DjangoObjectType, GenericFilterGQLTyp
 
     def resolve_line(root, info):
         if root.line:
-            line_object_dict = root.line.__dict__
+            line_object_dict = masked_for_reader(root.line, info).__dict__
             line_object_dict.pop('_state', None)
             key_values = list(line_object_dict.items())
             line_object_dict.clear()

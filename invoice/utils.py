@@ -1,7 +1,11 @@
+import copy
 import re
 
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
+
+from core.apps import CoreConfig
+from core.data_masking import MaskingClassStorage
 
 from invoice.models import (
     DetailPaymentInvoice,
@@ -21,6 +25,17 @@ def camel_to_underscore(name):
 
 def underscore_to_camel(name):
     return under_pat.sub(lambda x: x.group(1).upper(), name)
+
+
+def masked_for_reader(obj, info):
+    """``obj``, or a copy of it masked by the mask registered for its model when the user of the GraphQL request
+    may not see masked data. The object itself is left as it is."""
+    mask = MaskingClassStorage.get_masking_class(type(obj).__name__)
+    if mask is None or not mask.masking_enabled:
+        return obj
+    if info.context.user.has_perms(CoreConfig.gql_query_enable_viewing_masked_data_perms):
+        return obj
+    return mask.apply_mask(copy.deepcopy(obj))
 
 
 def resolve_payment_details(payment_invoice):
